@@ -65,8 +65,8 @@ static __weak id currentFirstResponder;
 
 static const NSInteger MMNumberKeyboardRows = 4;
 static const CGFloat MMNumberKeyboardRowHeight = 55.0f;
-static const CGFloat MMNumberKeyboardPadBorder = 7.0f;
-static const CGFloat MMNumberKeyboardPadSpacing = 8.0f;
+static const CGFloat MMNumberKeyboardPadBorder = 0.0f;
+static const CGFloat MMNumberKeyboardPadSpacing = 2.0f;
 
 #define UIKitLocalizedString(key) [[NSBundle bundleWithIdentifier:@"com.apple.UIKit"] localizedStringForKey:key value:@"" table:nil]
 
@@ -112,8 +112,6 @@ static const CGFloat MMNumberKeyboardPadSpacing = 8.0f;
         buttonFont = [UIFont fontWithName:@"HelveticaNeue-Light" size:28.0f];
     }
     
-    UIFont *doneButtonFont = [UIFont systemFontOfSize:17.0f];
-    
     for (MMNumberKeyboardButton key = numberMin; key < numberMax; key++) {
         UIButton *button = [_MMNumberKeyboardButton keyboardButtonWithStyle:MMNumberKeyboardButtonStyleWhite];
         NSString *title = @(key - numberMin).stringValue;
@@ -125,32 +123,12 @@ static const CGFloat MMNumberKeyboardPadSpacing = 8.0f;
     }
     
     UIImage *backspaceImage = [self.class _keyboardImageNamed:@"MMNumberKeyboardDeleteKey.png"];
-    UIImage *dismissImage = [self.class _keyboardImageNamed:@"MMNumberKeyboardDismissKey.png"];
+    UIButton *emptyButton = [_MMNumberKeyboardButton keyboardButtonWithStyle:MMNumberKeyboardButtonStyleGray];
+    [buttonDictionary setObject:emptyButton forKey:@(MMNumberKeyboardButtonSpecial)];
     
-    UIButton *backspaceButton = [_MMNumberKeyboardButton keyboardButtonWithStyle:MMNumberKeyboardButtonStyleGray];
-    [backspaceButton setImage:[backspaceImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] forState:UIControlStateNormal];
-    
-    [(_MMNumberKeyboardButton *)backspaceButton addTarget:self action:@selector(_backspaceRepeat:) forContinuousPressWithTimeInterval:0.15f];
-    
-    [buttonDictionary setObject:backspaceButton forKey:@(MMNumberKeyboardButtonBackspace)];
-    
-    UIButton *specialButton = [_MMNumberKeyboardButton keyboardButtonWithStyle:MMNumberKeyboardButtonStyleGray];
-    
-    [buttonDictionary setObject:specialButton forKey:@(MMNumberKeyboardButtonSpecial)];
-    
-    UIButton *doneButton = [_MMNumberKeyboardButton keyboardButtonWithStyle:MMNumberKeyboardButtonStyleDone];
-    [doneButton.titleLabel setFont:doneButtonFont];
-    [doneButton setTitle:UIKitLocalizedString(@"Done") forState:UIControlStateNormal];
-    
-    [buttonDictionary setObject:doneButton forKey:@(MMNumberKeyboardButtonDone)];
-    
-    UIButton *decimalPointButton = [_MMNumberKeyboardButton keyboardButtonWithStyle:MMNumberKeyboardButtonStyleWhite];
-    
-    NSLocale *locale = self.locale ?: [NSLocale currentLocale];
-    NSString *decimalSeparator = [locale objectForKey:NSLocaleDecimalSeparator];
-    [decimalPointButton setTitle:decimalSeparator ?: @"." forState:UIControlStateNormal];
-    
-    [buttonDictionary setObject:decimalPointButton forKey:@(MMNumberKeyboardButtonDecimalPoint)];
+    UIButton *backSpaceButton = [_MMNumberKeyboardButton keyboardButtonWithStyle:MMNumberKeyboardButtonStyleGray];
+    [backSpaceButton setImage:[backspaceImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] forState:UIControlStateNormal];
+    [buttonDictionary setObject:backSpaceButton forKey:@(MMNumberKeyboardButtonBackspace)];
     
     for (UIButton *button in buttonDictionary.objectEnumerator) {
         [button setExclusiveTouch:YES];
@@ -167,9 +145,6 @@ static const CGFloat MMNumberKeyboardPadSpacing = 8.0f;
     
     // Initialize an array for the separators.
     self.separatorViews = [NSMutableArray array];
-    
-    // Add default action.
-    [self configureSpecialKeyWithImage:dismissImage target:self action:@selector(_dismissKeyboard:)];
     
     // Add default return key title.
     [self setReturnKeyTitle:[self defaultReturnKeyTitle]];
@@ -277,18 +252,7 @@ static const CGFloat MMNumberKeyboardPadSpacing = 8.0f;
         }
     }
     
-    // Handle .
-    else if (keyboardButton == MMNumberKeyboardButtonDecimalPoint) {
-        NSString *decimalText = [button titleForState:UIControlStateNormal];
-        if ([delegate respondsToSelector:@selector(numberKeyboard:shouldInsertText:)]) {
-            BOOL shouldInsert = [delegate numberKeyboard:self shouldInsertText:decimalText];
-            if (!shouldInsert) {
-                return;
-            }
-        }
-        
-        [keyInput insertText:decimalText];
-    }
+#warning should fork and subclass
 }
 
 - (void)_backspaceRepeat:(UIButton *)button
@@ -459,7 +423,7 @@ NS_INLINE CGRect MMButtonRectMake(CGRect rect, CGRect contentRect, UIUserInterfa
     };
     
     // Layout.
-    const CGFloat columnWidth = CGRectGetWidth(contentRect) / 4.0f;
+    const CGFloat columnWidth = CGRectGetWidth(contentRect) / 3.0f;
     const CGFloat rowHeight = MMNumberKeyboardRowHeight;
     
     CGSize numberSize = CGSizeMake(columnWidth, rowHeight);
@@ -492,6 +456,10 @@ NS_INLINE CGRect MMButtonRectMake(CGRect rect, CGRect contentRect, UIUserInterfa
             NSInteger pos = idx % numbersPerLine;
             
             rect.origin.y = line * numberSize.height;
+            if (digit == 6) {
+                rect.origin.y += 0.3;
+            }
+
             rect.origin.x = pos * numberSize.width;
         }
         
@@ -507,8 +475,8 @@ NS_INLINE CGRect MMButtonRectMake(CGRect rect, CGRect contentRect, UIUserInterfa
         [specialKey setFrame:MMButtonRectMake(rect, contentRect, interfaceIdiom)];
     }
     
-    // Layout decimal point.
-    UIButton *decimalPointKey = buttonDictionary[@(MMNumberKeyboardButtonDecimalPoint)];
+    // Layout backspace point.
+    UIButton *decimalPointKey = buttonDictionary[@(MMNumberKeyboardButtonBackspace)];
     if (decimalPointKey) {
         CGRect rect = (CGRect){ .size = numberSize };
         rect.origin.y = numberSize.height * 3;
@@ -517,22 +485,6 @@ NS_INLINE CGRect MMButtonRectMake(CGRect rect, CGRect contentRect, UIUserInterfa
         [decimalPointKey setFrame:MMButtonRectMake(rect, contentRect, interfaceIdiom)];
         
         decimalPointKey.hidden = !allowsDecimalPoint;
-    }
-    
-    // Layout utility column.
-    const int utilityButtonKeys[2] = { MMNumberKeyboardButtonBackspace, MMNumberKeyboardButtonDone };
-    const CGSize utilitySize = CGSizeMake(columnWidth, rowHeight * 2.0f);
-    
-    for (NSInteger idx = 0; idx < sizeof(utilityButtonKeys) / sizeof(int); idx++) {
-        MMNumberKeyboardButton key = utilityButtonKeys[idx];
-        
-        UIButton *button = buttonDictionary[@(key)];
-        CGRect rect = (CGRect){ .size = utilitySize };
-        
-        rect.origin.x = columnWidth * 3.0f;
-        rect.origin.y = idx * utilitySize.height;
-        
-        [button setFrame:MMButtonRectMake(rect, contentRect, interfaceIdiom)];
     }
     
     // Layout separators if phone.
@@ -657,7 +609,7 @@ NS_INLINE CGRect MMButtonRectMake(CGRect rect, CGRect contentRect, UIUserInterfa
 {
     _MMNumberKeyboardButton *button = [self buttonWithType:UIButtonTypeCustom];
     button.style = style;
-
+    
     return button;
 }
 
@@ -719,15 +671,6 @@ NS_INLINE CGRect MMButtonRectMake(CGRect rect, CGRect contentRect, UIUserInterfa
     self.highlightedFillColor = highlightedFillColor;
     self.controlColor = controlColor;
     self.highlightedControlColor = highlightedControlColor;
-    
-    if (interfaceIdiom == UIUserInterfaceIdiomPad) {
-        CALayer *buttonLayer = [self layer];
-        buttonLayer.cornerRadius = 4.0f;
-        buttonLayer.shadowColor = [UIColor colorWithRed:0.533f green:0.541f blue:0.556f alpha:1].CGColor;
-        buttonLayer.shadowOffset = CGSizeMake(0, 1.0f);
-        buttonLayer.shadowOpacity = 1.0f;
-        buttonLayer.shadowRadius = 0.0f;
-    }
 }
 
 - (void)willMoveToWindow:(UIWindow *)newWindow
